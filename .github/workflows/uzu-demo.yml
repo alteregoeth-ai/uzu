@@ -19,9 +19,11 @@ jobs:
         run: |
           uname -a
           system_profiler SPHardwareDataType
+          xcodebuild -version
+          xcrun -f metal
 
       - name: Build uzu CLI
-        run: cargo build --release -p cli
+        run: cargo build -p cli
 
       - name: Check CLI
-        run: cargo run --release -p cli -- --help
+        run: cargo run -p cli -- --help
