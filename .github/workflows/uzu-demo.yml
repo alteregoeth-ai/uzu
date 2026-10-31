@@ -1,0 +1,27 @@
+
+name: Uzu macOS test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Show hardware
+        run: |
+          uname -a
+          system_profiler SPHardwareDataType
+
+      - name: Build uzu CLI
+        run: cargo build --release -p cli
+
+      - name: Check CLI
+        run: cargo run --release -p cli -- --help
