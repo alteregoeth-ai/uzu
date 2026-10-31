@@ -24,22 +24,21 @@ jobs:
           uname -a
           system_profiler SPHardwareDataType
           xcodebuild -version
-          xcrun -f metal
 
-      - name: Build uzu CLI
-        run: cargo build -p cli
+      - name: Build uzu CLI (CPU only)
+        run: cargo build -p cli --no-default-features --features cpu
 
       - name: Check CLI
-        run: cargo run -p cli -- --help
+        run: cargo run -p cli --no-default-features --features cpu -- --help
 
       - name: Run model and test API
         shell: bash
         run: |
           set -e
 
-          echo "Starting Uzu with Qwen 3.5 4B..."
+          echo "Starting Uzu with Qwen 3.5 4B using CPU backend..."
 
-          cargo run -p cli -- server \
+          cargo run -p cli --no-default-features --features cpu -- server \
             --model trymirai/Qwen3.5-4B-M \
             > uzu-server.log 2>&1 &
 
