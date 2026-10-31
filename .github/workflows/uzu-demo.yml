@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 90
 
     steps:
@@ -23,24 +23,24 @@ jobs:
         run: |
           uname -a
           system_profiler SPHardwareDataType
-          xcodebuild -version
-          xcrun -f metal
 
-      - name: Build uzu CLI with Metal
-        run: cargo build -p cli
+      - name: Build uzu CLI (CPU)
+        run: cargo build -p cli --no-default-features --features cpu
 
       - name: Check CLI
-        run: cargo run -p cli -- --help
+        run: cargo run -p cli --no-default-features --features cpu -- --help
 
-      - name: Run model and test API
+      - name: Run Qwen 0.8B and test API
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          echo "Starting Uzu with Qwen 3.5 4B on Apple Silicon..."
+          MODEL="alibaba:qwen3.5:0.8b:mirai:mirai-m:4"
 
-          cargo run -p cli -- server \
-            --model trymirai/Qwen3.5-4B-M \
+          echo "Starting Uzu with Qwen 3.5 0.8B on Intel CPU..."
+
+          cargo run -p cli --no-default-features --features cpu -- server \
+            --model "$MODEL" \
             > uzu-server.log 2>&1 &
 
           SERVER_PID=$!
@@ -53,7 +53,7 @@ jobs:
           }
           trap cleanup EXIT
 
-          echo "Waiting for model to download and load..."
+          echo "Waiting for model to load..."
 
           READY=false
 
@@ -75,35 +75,37 @@ jobs:
 
           if [ "$READY" != "true" ]; then
             echo "Server did not become ready."
+            cat uzu-server.log
             exit 1
           fi
 
-          echo "Model is ready!"
+          echo ""
+          echo "MODEL READY!"
           cat models.json
 
           echo ""
-          echo "Sending prompt to Qwen..."
+          echo "=== SENDING PROMPT TO QWEN ==="
 
-          curl --fail-with-body -sS \
-            --max-time 600 \
+          curl -N --fail-with-body -sS \
+            --max-time 300 \
             http://127.0.0.1:8000/v1/chat/completions \
             -H "Content-Type: application/json" \
-            -d '{
-              "model": "alibaba:qwen3.5:4b:mirai:mirai-m:4",
-              "messages": [
+            -d "{
+              \"model\": \"$MODEL\",
+              \"messages\": [
                 {
-                  "role": "user",
-                  "content": "Explain how a transformer language model works in three simple sentences."
+                  \"role\": \"user\",
+                  \"content\": \"Explain how a transformer language model works in three simple sentences.\"
                 }
               ],
-              "stream": false,
-              "max_tokens": 150
-            }' | tee response.json
+              \"stream\": true,
+              \"max_tokens\": 80
+            }" | tee response.txt
 
           echo ""
-          echo "QWEN RESPONSE RECEIVED SUCCESSFULLY!"
+          echo "=== QWEN RESPONSE COMPLETED ==="
 
-      - name: Save logs and model response
+      - name: Save logs and response
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -111,5 +113,5 @@ jobs:
           path: |
             uzu-server.log
             models.json
-            response.json
+            response.txt
           if-no-files-found: ignore
