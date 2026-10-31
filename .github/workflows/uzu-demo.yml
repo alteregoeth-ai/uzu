@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-26-intel
+    runs-on: macos-26
     timeout-minutes: 90
 
     steps:
@@ -24,21 +24,22 @@ jobs:
           uname -a
           system_profiler SPHardwareDataType
           xcodebuild -version
+          xcrun -f metal
 
-      - name: Build uzu CLI (CPU only)
-        run: cargo build -p cli --no-default-features --features cpu
+      - name: Build uzu CLI with Metal
+        run: cargo build -p cli
 
       - name: Check CLI
-        run: cargo run -p cli --no-default-features --features cpu -- --help
+        run: cargo run -p cli -- --help
 
       - name: Run model and test API
         shell: bash
         run: |
           set -e
 
-          echo "Starting Uzu with Qwen 3.5 4B using CPU backend..."
+          echo "Starting Uzu with Qwen 3.5 4B on Apple Silicon..."
 
-          cargo run -p cli --no-default-features --features cpu -- server \
+          cargo run -p cli -- server \
             --model trymirai/Qwen3.5-4B-M \
             > uzu-server.log 2>&1 &
 
@@ -46,6 +47,9 @@ jobs:
 
           cleanup() {
             kill "$SERVER_PID" 2>/dev/null || true
+            echo ""
+            echo "=== UZU SERVER LOG ==="
+            cat uzu-server.log || true
           }
           trap cleanup EXIT
 
@@ -70,8 +74,7 @@ jobs:
           done
 
           if [ "$READY" != "true" ]; then
-            echo "Server did not become ready in 30 minutes."
-            cat uzu-server.log
+            echo "Server did not become ready."
             exit 1
           fi
 
@@ -79,13 +82,14 @@ jobs:
           cat models.json
 
           echo ""
-          echo "Sending a real prompt to Qwen..."
+          echo "Sending prompt to Qwen..."
 
           curl --fail-with-body -sS \
+            --max-time 600 \
             http://127.0.0.1:8000/v1/chat/completions \
             -H "Content-Type: application/json" \
             -d '{
-              "model": "trymirai/Qwen3.5-4B-M",
+              "model": "alibaba:qwen3.5:4b:mirai:mirai-m:4",
               "messages": [
                 {
                   "role": "user",
@@ -97,8 +101,7 @@ jobs:
             }' | tee response.json
 
           echo ""
-          echo "=== UZU SERVER LOG ==="
-          cat uzu-server.log
+          echo "QWEN RESPONSE RECEIVED SUCCESSFULLY!"
 
       - name: Save logs and model response
         if: always()
